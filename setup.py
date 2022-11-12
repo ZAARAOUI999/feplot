@@ -3,7 +3,7 @@ from distutils.core import setup
 setup(
     name = 'feplot',
     packages = ['feplot'],
-    version = '0.0.3',
+    version = '0.0.4',
     description = 'Visualization tool for FElupe',
     author = 'Mohamed ZAARAOUI',
     author_email = 'mohamed.zaaraoui.999@gmail.com',
