@@ -1,7 +1,7 @@
 import felupe as fem
 import numpy as np
 
-from feplot.feplot.pylab import Plotter
+from feplot.pylab import Plotter
 
 def test_3d_xy():
     #3D plot
