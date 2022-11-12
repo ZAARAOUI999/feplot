@@ -9,6 +9,6 @@ setup(
     author_email = 'mohamed.zaaraoui.999@gmail.com',
     url = 'https://github.com/ZAARAOUI999/feplot',
     download_url = 'https://github.com/ZAARAOUI999/feplot.git',
-    keywords = ['felupe', 'visualiation'],
+    keywords = ['felupe', 'visualization'],
     classifiers = [],
 )
