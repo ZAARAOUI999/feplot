@@ -110,7 +110,7 @@ class Plotter():
         if self.show_mesh:
             # plot mesh edges
             quatplot(points[:, 0], points[:, 1], cells,
-                     ax=_ax, color='k', facecolor='none')
+                     _ax, color='k', facecolor='none')
         return values, fig, _ax
 
     def plot3d(self, *args):
@@ -130,7 +130,7 @@ class Plotter():
         _c = 'none'
         if self.show_mesh:
             _c = 'k'
-        fig = polyplot(points, cells, values, ax=_ax, c=_c)
+        fig = polyplot(points, cells, values, _ax, c=_c)
         return values, fig, _ax
 
     def plot_displacement(self, field, label: str = '', component: int = 0, **kwds):
