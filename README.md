@@ -10,7 +10,7 @@ pip install feplot
 ```
 All is ready now, let's move on!
 
-## How To Use
+## How to Use
 
 Starting with a 2D case:
 
