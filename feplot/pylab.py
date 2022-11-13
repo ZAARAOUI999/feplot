@@ -211,3 +211,11 @@ class Plotter():
                         self._ax, axis[0]+'axis').set_pane_color((1., 1., 1., 0.))
                     getattr(
                         self._ax, axis[0]+'axis')._axinfo['grid']['color'] = (1., 1., 1., 0.)
+        else:
+            axes = {'x': _x, 'y': _y}
+            for axis in axes.items():
+                if axis[1]:
+                    getattr(
+                        self._ax, axis[0]+'axis').set_pane_color((1., 1., 1., 0.))
+                    getattr(
+                        self._ax, axis[0]+'axis')._axinfo['grid']['color'] = (1., 1., 1., 0.)
