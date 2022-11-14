@@ -23,73 +23,56 @@ import numpy as np
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 
-from scipy.spatial import Delaunay, distance, ConvexHull as conv
+from scipy.spatial import ConvexHull as conv
 from matplotlib import collections
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
-def quatplot(_u, _v, cells, _ax, **kwargs):
+hex_mask = np.array([[0, 1, 2, 3], [0, 1, 5, 4],
+                     (1, 2, 6, 5), [2, 3, 7, 6],
+                     [0, 3, 7, 4], [4, 5, 6, 7]])
+tetra_mask = np.array([[0, 1, 2], [0, 2, 3],
+                      [0, 3, 1], [1, 2, 3]])
+
+
+def quatplot(mesh, _ax, **kwargs):
     """Plot a 2D mesh"""
-    _uv = np.c_[_u, _v]
-    verts = _uv[cells]
-    mesh = collections.PolyCollection(verts, **kwargs)
-    _ax.add_collection(mesh)
+    verts = mesh.points[mesh.cells]
+    _mesh = collections.PolyCollection(verts, **kwargs)
+    _ax.add_collection(_mesh)
     _ax.autoscale()
 
 
-def ratio(p):
-
-    p1, p2, p3 = p
-    a = distance.euclidean(p1, p2)
-    b = distance.euclidean(p2, p3)
-    c = distance.euclidean(p3, p1)
-    s = np.sum([a, b, c])
-    ri = np.sqrt((s-a)*(s-b)*(s-c)/s)
-    ro = (a*b*c)/(np.sqrt((a+b-c)*(a-b+c)*(-a+b+c)*(a+b+c)))
-    ar = 2 * ro / ri
-    return abs(ar)
-
-
-def polyplot(points, cells, values, _ax, update=True, method=2, **kwargs):
+def polyplot(mesh, values, _ax, update=True, **kwargs):
     """Plot a 3D mesh"""
-    polys = []
-    new_values = []
-    if method == 2:
-        #########################################################################
-        new_points = [points[np.sort(cell)] for cell in cells]
-        triangs = [Delaunay(points) for points in new_points]
-        hulls = [triang.convex_hull for triang in triangs]
-        polys = [list(points[hull]) for points, hull in zip(new_points, hulls)]
-        new_values = [list(values[np.sort(cell)][hull])
-                      for cell, hull in zip(cells, hulls)]  # [mask]
-        #########################################################################
-        polys = np.array(polys).reshape(-1, 3, 3)
-        new_values = np.array(new_values).reshape(-1, 3).mean(1)
+    _m = mesh.copy()
+    points = _m.points
+    cells = _m.cells
+    cell_type = _m.cell_type
+    # Convert points array to cells points array
+    points = points[cells]
+    # Get cell type mask
+    if cell_type == 'hexahedron':
+        mask = hex_mask
+    elif cell_type == 'tetra':
+        mask = tetra_mask
+    # Get polygons
+    polys = points[:, mask].reshape(-1, 4, 3)
+    # Project values
+    values = values[cells][:, mask].reshape(-1, 4).mean(1)
+    # Create matplotlib mesh
+    _mesh = Poly3DCollection(polys, linewidths=.5, edgecolor=kwargs.pop('c'),
+                             closed=True, cmap='coolwarm', zsort='average',
+                             facecolor='grey')
+    _ax.add_collection3d(_mesh)
 
-    else:
-        for cell in cells:
-            new_points = points[np.sort(cell)]
-            triang = Delaunay(new_points)
-            hull = triang.convex_hull
-            poly = new_points[hull]
-            polys.extend(list(poly))
-            new_values.extend(list(values[np.sort(cell)][hull]))
-
-    mesh = Poly3DCollection(polys, linewidths=.5, edgecolor=kwargs.pop('c'),
-                            closed=True, cmap='turbo', zsort='average',
-                            facecolor='grey')
     if update:
-        new_values = np.array(new_values)
-        if method == 1:
-            new_values = new_values.mean(1)
-        mesh.set_array(new_values)
-    _ax.add_collection3d(mesh)
-    ###### Don't remove this till I get where is the problem!!!########
-    _ax.scatter(points[:, 0], points[:, 1], points[:, 2], s=0.0001, marker='o',
-                c='k', cmap='turbo')
-    ###################################################################
-    _ax.relim()
-    return mesh
+        _mesh.set_array(values)
+    _ax.set_xlim(mesh.points[:, 0].min(), mesh.points[:, 0].max())
+    _ax.set_ylim(mesh.points[:, 1].min(), mesh.points[:, 1].max())
+    _ax.set_zlim(mesh.points[:, 2].min(), mesh.points[:, 2].max())
+
+    return _mesh
 
 
 def plot_2d_boundary(_ax, points):
@@ -104,10 +87,8 @@ def plot_2d_boundary(_ax, points):
 
 def plot_3d_boundary(_ax, mesh):
     """Plot mesh boundaries"""
-    points = mesh.points
-    cells = mesh.cells
-    values = np.zeros(shape=points.shape)
-    polyplot(points, cells, values, _ax, update=False, c='none')
+    values = np.zeros(shape=mesh.points.shape)
+    polyplot(mesh, values, _ax, update=False, c='none')
 
 
 def plot_model(field, bounds, show_load=True, show_bc=True, **kwds):
@@ -119,6 +100,7 @@ def plot_model(field, bounds, show_load=True, show_bc=True, **kwds):
     elif dim == 3:
         _ax = plt.figure().add_subplot(projection="3d")
         plot_3d_model(_ax, field, bounds, show_load=show_load, show_bc=show_bc)
+    _ax.grid(False)
 
 
 def plot_2d_model(_ax, field, bounds, show_load, show_bc):
