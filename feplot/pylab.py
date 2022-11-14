@@ -30,7 +30,8 @@ from .tools import quatplot, polyplot
 
 rcParams['pgf.texsystem'] = 'pdflatex'
 rcParams.update({'font.family': 'serif', 'font.size': 10,
-                 'axes.labelsize': 12, 'axes.titlesize': 13, 'figure.titlesize': 13})
+                 'axes.labelsize': 10, 'axes.titlesize': 10,
+                 'figure.titlesize': 10})
 
 
 class Plotter():
@@ -47,12 +48,16 @@ class Plotter():
         self.grid = False
         self._ax = None
         self.data = dict()
+        self.axes = ['x', 'y', 'z']
 
     def plot(self, field, values, component: int = 0,
              update: bool = True, **kwds):
         """Plot results"""
-        axes = ['x', 'y', 'z']
-        args = ['deformed', 'show_mesh', 'show_min_max', 'grid', 'n_ticks']
+        # Clear everything
+        plt.clf()
+        # Update Plotter attributes
+        args = ['deformed', 'show_mesh',
+                'show_min_max', 'grid', 'n_ticks', 'axes']
         for arg in args:
             if arg in kwds:
                 setattr(self, arg, kwds[arg])
@@ -77,45 +82,45 @@ class Plotter():
             self.data.get('points')[:, :dim] += _du[:, :dim]
 
         if dim == 3:
-            values, fig, _ax = self.plot3d(self.data.get('points'), self.data.get('cells'),
-                                           axes, values, component)
+            values, fig, _ax = self.plot3d(self.data.get(
+                'mesh'), values, self.axes, component)
             self._ax = _ax
         else:
-            values, fig, _ax = self.plot2d(self.data.get('points'), self.data.get('cells'),
-                                           axes, values, component)
+            values, fig, _ax = self.plot2d(self.data.get(
+                'mesh'), values, self.axes, component)
             self._ax = _ax
         self.colorbar(fig, _ax, label=label, span=[values.min(), values.max()])
 
     def plot2d(self, *args):
         """Plot 2D results"""
-        points, cells, axes, values, component = args
+        mesh, values, axes, component = args
         # make a 2d figure
         _ax = plt.figure().add_subplot()
         # setting plot labels
         _ax.set_xlabel(axes[0]+'$\\longrightarrow$')
         _ax.set_ylabel(axes[1]+'$\\longrightarrow$')
         # get specified component from the given data
-        if component < 0:
-            values = values.mean(-1)
-        else:
-            values = values[:, component]
+        if values.ndim > 1:
+            if component < 0:
+                values = values.mean(-1)
+            else:
+                values = values[:, component]
         # Delaunay triangulation of all points.
-        triang = tri.Triangulation(points[:, 0], points[:, 1])
+        triang = tri.Triangulation(mesh.points[:, 0], mesh.points[:, 1])
         # remove unwanted triangles
         mask = tri.TriAnalyzer(triang).get_flat_tri_mask(
             min_circle_ratio=.1, rescale=False)
         triang.set_mask(mask)
         # plot interpolated data
-        fig = _ax.tricontourf(triang, values, cmap='turbo', levels=128)
+        fig = _ax.tricontourf(triang, values, cmap='coolwarm', levels=128)
         if self.show_mesh:
             # plot mesh edges
-            quatplot(points[:, 0], points[:, 1], cells,
-                     _ax, color='k', facecolor='none')
+            quatplot(mesh, _ax, color='k', facecolor='none')
         return values, fig, _ax
 
     def plot3d(self, *args):
         """Plot 3D results"""
-        points, cells, axes, values, component = args
+        mesh, values, axes, component = args
         # make a 3d figure
         _ax = plt.figure().add_subplot(projection='3d')
         # setting plot labels
@@ -123,14 +128,15 @@ class Plotter():
         _ax.set_ylabel(axes[1]+'$\\longrightarrow$')
         _ax.set_zlabel(axes[2]+'$\\longrightarrow$')
         # get specified component from the given data
-        if component < 0:
-            values = values.mean(-1)
-        else:
-            values = values[:, component]
+        if values.ndim > 1:
+            if component < 0:
+                values = values.mean(-1)
+            else:
+                values = values[:, component]
         _c = 'none'
         if self.show_mesh:
             _c = 'k'
-        fig = polyplot(points, cells, values, _ax, c=_c)
+        fig = polyplot(mesh, values, _ax, c=_c)
         return values, fig, _ax
 
     def plot_displacement(self, field, label: str = '', component: int = 0, **kwds):
@@ -204,18 +210,25 @@ class Plotter():
     def hide_grid(self, _x: bool = True, _y: bool = True, _z: bool = True):
         """Hide gridlines"""
         if isinstance(self._ax, Axes3D):
-            axes = {'x': _x, 'y': _y, 'z': _z}
-            for axis in axes.items():
-                if axis[1]:
-                    getattr(
-                        self._ax, axis[0]+'axis').set_pane_color((1., 1., 1., 0.))
-                    getattr(
-                        self._ax, axis[0]+'axis')._axinfo['grid']['color'] = (1., 1., 1., 0.)
+            self._ax.set_axis_off()
         else:
-            axes = {'x': _x, 'y': _y}
+            self._ax.set_axis_off()
+
+    def show_ruler(self, _x: bool = True, _y: bool = True, _z: bool = True):
+        """Show ruler"""
+        axes = {'x': _x, 'y': _y, 'z': _z}
+        self._ax.set_axis_on()
+        self._ax.grid(False)
+        if isinstance(self._ax, Axes3D):
             for axis in axes.items():
-                if axis[1]:
-                    getattr(
-                        self._ax, axis[0]+'axis').set_pane_color((1., 1., 1., 0.))
-                    getattr(
-                        self._ax, axis[0]+'axis')._axinfo['grid']['color'] = (1., 1., 1., 0.)
+                getattr(self._ax, 'w_'+axis[0] +
+                        'axis').set_pane_color((1, 1, 1, 0))
+                if not axis[1]:
+                    getattr(self._ax, 'set_'+axis[0]+'ticklabels')([])
+                    getattr(self._ax, 'w_' +
+                            axis[0]+'axis').line.set_color((1, 1, 1, 0))
+                    getattr(self._ax, 'set_'+axis[0]+'ticks')([])
+                    getattr(self._ax, 'set_'+axis[0]+'label')('')
+
+        else:
+            self._ax.set_axis_off()
