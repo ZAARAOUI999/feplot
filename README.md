@@ -1,7 +1,7 @@
 # FEplot
 A visualization tool for FElupe. 
 
-FEplot is based on the polpular visualization library matplotlib which is used generally to create 2D plots. The fantastic thing that comes with FEplot is that matplotlib becomes able to plot 3D FEA results and I mean volume results not surfaces.
+FEplot is based on the popular visualization library ```matplotlib``` which is used generally to create 2D plots. The fantastic thing that comes with FEplot is that ```matplotlib``` becomes able to plot 3D volume FEA results.
 
 ## Setup
 To run this project, you can easily install it locally using pip:
@@ -12,63 +12,59 @@ All is ready now, let's move on!
 
 ## How to Use
 
-Starting with a 2D case:
+Starting with a quick example:
 
 ```python
 import felupe as fem
-from feplot.pylab import Plotter
+from feplot.pylab import Plotter 
 
-# 2D Mesh case
-# Get some data to plot
-# Create mesh
-mesh = fem.Rectangle(b=(10,10), n=20)
-# Create region
-region = fem.RegionQuad(mesh)
-# Create field
-field = fem.FieldsMixed(region, n=1)
-# Create material
-material = fem.NeoHooke(mu=1, bulk=1)
-# Create solidbody
-solid = fem.SolidBody(material, field)
-# Set boundaries conditions (uniaxial test)
-boundaries, _ = fem.dof.uniaxial(field,right=10, clamped=True)
-# Define displacement amplitude 
-move = fem.math.linsteps([0,15],5)
-ramp = {boundaries['move']:move}
-# Create step
-step = fem.Step([solid], ramp, boundaries)
-# Create job and burn it!
-job = fem.Job([step])
-job.evaluate(verbose=False)
-
-# Plot displacements along x-axis 
-pl = Plotter() 
-pl.plot_displacement(field, label='U$_1$', component=0, show_mesh=True, deformed=True,
-                     show_min_max=True)
-```
-You will get this 👇
-
-![Figure 2022-11-12 215937](https://user-images.githubusercontent.com/115699524/201494431-27c74616-b6d7-43fe-9088-9739efceeaa8.png)
-
-For the 3D case, just we will replace the mesh and the region definitions. Then, we have:
-```python
-# Create mesh
-mesh = fem.Cube(b=(10,10,10), n=10)
-# Create region
+# create a hexahedron-region on a cube
+mesh = fem.Cube(n=11)
 region = fem.RegionHexahedron(mesh)
+
+# add a field container (with a vector-valued displacement field)
+field = fem.FieldContainer([fem.Field(region, dim=3)])
+
+# apply a uniaxial elongation on the cube
+boundaries = fem.dof.uniaxial(field, clamped=True)[0]
+
+# define the constitutive material behaviour 
+# and create a nearly-incompressible (u,p,J - formulation) solid body
+umat = fem.NeoHooke(mu=1)
+solid = fem.SolidBodyNearlyIncompressible(umat, field, bulk=5000)
+
+# prepare a step with substeps
+move = fem.math.linsteps([0, 1], num=10)
+step = fem.Step(
+    items=[solid], 
+    ramp={boundaries["move"]: move}, 
+    boundaries=boundaries
+)
+
+# add the step to a job, evaluate all substeps
+job = fem.Job(steps=[step])
+job.evaluate()
+
+# initialize plotter 
+pl = Plotter()
+# plot displacements results (X-Axis)
+pl.plot_displacement(field, label='U$_1$', component=0)
+# hide grid
+pl.hide_grid()
 ```
-After running your code, you will get this 👇
 
-![Figure 2022-11-12 220941](https://user-images.githubusercontent.com/115699524/201494735-1e6cfe7b-51c4-4035-878e-5776db0e9316.png)
+![Figure 2022-11-14 184959](https://user-images.githubusercontent.com/115699524/201731963-3e0f906b-1858-4dcd-bb22-ff5e56a9e598.png)
 
-You can choose a specified view plane, for e.g. : the XY plane, simply add the following line:
+Here are some other features:
 
 ```python
+# set view to XY-Plane
 pl.xy_view()
+# add ruler (only for X-Axis)
+pl.show_ruler(1, 0, 0)
 ```
-The result should be like this 👇
 
-![Figure 2022-11-12 221558](https://user-images.githubusercontent.com/115699524/201494907-7716d7d4-9d7e-4833-a671-87cbc58cb51d.png)
+![Figure 2022-11-14 184746](https://user-images.githubusercontent.com/115699524/201732563-57dc2f33-4e0b-4ba2-aec3-4ee59309d626.png)
 
 # License
 FEplot - A visualization tool for FElupe (C) 2022 Mohamed ZAARAOUI, Tunisia.
