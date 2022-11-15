@@ -31,19 +31,23 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 hex_mask = np.array([[0, 1, 2, 3], [0, 1, 5, 4],
                      (1, 2, 6, 5), [2, 3, 7, 6],
                      [0, 3, 7, 4], [4, 5, 6, 7]])
+
 tetra_mask = np.array([[0, 1, 2], [0, 2, 3],
                       [0, 3, 1], [1, 2, 3]])
 
 
-def quatplot(mesh, _ax, **kwargs):
+def surface_plot(mesh, values, _ax, **kwargs):
     """Plot a 2D mesh"""
     verts = mesh.points[mesh.cells]
-    _mesh = collections.PolyCollection(verts, **kwargs)
+    _mesh = collections.PolyCollection(verts, edgecolor=kwargs.pop('c'),
+                                       cmap='coolwarm')
+    _mesh.set_array(values[mesh.cells].reshape(-1, 4).mean(1))
     _ax.add_collection(_mesh)
     _ax.autoscale()
+    return _mesh
 
 
-def polyplot(mesh, values, _ax, update=True, **kwargs):
+def volume_plot(mesh, values, _ax, update=True, **kwargs):
     """Plot a 3D mesh"""
     _m = mesh.copy()
     points = _m.points
@@ -85,10 +89,10 @@ def plot_2d_boundary(_ax, points):
     _ax.set_aspect('equal')
 
 
-def plot_3d_boundary(_ax, mesh):
+def plot_3d_boundary(_ax, mesh, c='k'):
     """Plot mesh boundaries"""
     values = np.zeros(shape=mesh.points.shape)
-    polyplot(mesh, values, _ax, update=False, c='none')
+    volume_plot(mesh, values, _ax, update=False, c=c)
 
 
 def plot_model(field, bounds, show_load=True, show_bc=True, **kwds):
