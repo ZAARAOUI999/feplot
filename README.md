@@ -51,9 +51,10 @@ pl = Plotter()
 pl.plot_displacement(field, label='U$_1$', component=0)
 # hide grid
 pl.hide_grid()
+pl.add_axes()
 ```
 
-![Figure 2022-11-14 184959](https://user-images.githubusercontent.com/115699524/201731963-3e0f906b-1858-4dcd-bb22-ff5e56a9e598.png)
+![Figure 2022-11-15 145831](https://user-images.githubusercontent.com/115699524/201938647-51967be1-66e9-44eb-a979-4c197cbb92d5.png)
 
 Here are some other features:
 
@@ -64,7 +65,7 @@ pl.xy_view()
 pl.show_ruler(1, 0, 0)
 ```
 
-![Figure 2022-11-14 184746](https://user-images.githubusercontent.com/115699524/201732563-57dc2f33-4e0b-4ba2-aec3-4ee59309d626.png)
+![Figure 2022-11-15 145945](https://user-images.githubusercontent.com/115699524/201938756-e52ae37a-c593-46bf-a1df-e998a6fdc10e.png)
 
 # License
 FEplot - A visualization tool for FElupe (C) 2022 Mohamed ZAARAOUI, Tunisia.
