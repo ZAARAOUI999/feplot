@@ -1,7 +1,7 @@
 
 [project]
 name = "feplot"
-version = "0.0.8"
+version = "0.0.9"
 description = "Visualization tool for FElupe"
 readme = "README.md"
 requires-python = ">=3.6"
