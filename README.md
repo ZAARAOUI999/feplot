@@ -55,7 +55,9 @@ pl.hide_grid()
 pl.add_axes()
 ```
 
-![Figure 2022-11-15 145831](https://user-images.githubusercontent.com/115699524/201938647-51967be1-66e9-44eb-a979-4c197cbb92d5.png)
+<p align="center">
+  <img width="344" height="267" src="https://user-images.githubusercontent.com/115699524/201938647-51967be1-66e9-44eb-a979-4c197cbb92d5.png">
+</p>
 
 Here are some other features:
 
@@ -66,7 +68,9 @@ pl.xy_view()
 pl.show_ruler(1, 0, 0)
 ```
 
-![Figure 2022-11-15 145945](https://user-images.githubusercontent.com/115699524/201938756-e52ae37a-c593-46bf-a1df-e998a6fdc10e.png)
+<p align="center">
+  <img width="344" height="267" src="https://user-images.githubusercontent.com/115699524/201938756-e52ae37a-c593-46bf-a1df-e998a6fdc10e.png">
+</p>
 
 # License
 FEplot - A visualization tool for FElupe (C) 2022 Mohamed ZAARAOUI, Tunisia.
