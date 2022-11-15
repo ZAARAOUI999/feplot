@@ -1,7 +1,7 @@
 # FEplot
 A visualization tool for FElupe. 
 
-FEplot is based on the popular visualization library ```matplotlib``` which is used generally to create 2D plots. The fantastic thing that comes with FEplot is that ```matplotlib``` becomes able to plot 3D volume FEA results.
+FEplot is based on the popular visualization library ```matplotlib``` which is a comprehensive library for creating static, animated, and interactive visualizations in Python. The main aim of this package is to visualize FElupe results (FElupe is a super finite element analysis package).
 
 ## Setup
 To run this project, you can easily install it locally using pip:
