@@ -51,6 +51,7 @@ pl = Plotter()
 pl.plot_displacement(field, label='U$_1$', component=0)
 # hide grid
 pl.hide_grid()
+# add orientation axes
 pl.add_axes()
 ```
 
