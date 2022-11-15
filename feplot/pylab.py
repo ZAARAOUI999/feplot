@@ -26,8 +26,8 @@ from matplotlib import rcParams, tri, ticker
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from .tools import quatplot, polyplot
-
+from .tools import surface_plot, volume_plot
+from .entities import arrow_3d
 rcParams['pgf.texsystem'] = 'pdflatex'
 rcParams.update({'font.family': 'serif', 'font.size': 10,
                  'axes.labelsize': 10, 'axes.titlesize': 10,
@@ -48,7 +48,7 @@ class Plotter():
         self.grid = False
         self._ax = None
         self.data = dict()
-        self.axes = ['x', 'y', 'z']
+        self.axes = None
 
     def plot(self, field, values, component: int = 0,
              update: bool = True, **kwds):
@@ -82,51 +82,46 @@ class Plotter():
             self.data.get('points')[:, :dim] += _du[:, :dim]
 
         if dim == 3:
-            values, fig, _ax = self.plot3d(self.data.get(
-                'mesh'), values, self.axes, component)
+            values, fig, _ax = self.plot3d(
+                self.data.get('mesh'), values, component)
             self._ax = _ax
         else:
-            values, fig, _ax = self.plot2d(self.data.get(
-                'mesh'), values, self.axes, component)
+            values, fig, _ax = self.plot2d(
+                self.data.get('mesh'), values, component)
             self._ax = _ax
         self.colorbar(fig, _ax, label=label, span=[values.min(), values.max()])
 
     def plot2d(self, *args):
         """Plot 2D results"""
-        mesh, values, axes, component = args
+        mesh, values, component = args
         # make a 2d figure
         _ax = plt.figure().add_subplot()
         # setting plot labels
-        _ax.set_xlabel(axes[0]+'$\\longrightarrow$')
-        _ax.set_ylabel(axes[1]+'$\\longrightarrow$')
+        _ax.set_xlabel('x')
+        _ax.set_ylabel('y')
         # get specified component from the given data
         if values.ndim > 1:
             if component < 0:
                 values = values.mean(-1)
             else:
                 values = values[:, component]
-        # Delaunay triangulation of all points.
-        triang = tri.Triangulation(mesh.points[:, 0], mesh.points[:, 1])
-        # remove unwanted triangles
-        mask = tri.TriAnalyzer(triang).get_flat_tri_mask(
-            min_circle_ratio=.1, rescale=False)
-        triang.set_mask(mask)
-        # plot interpolated data
-        fig = _ax.tricontourf(triang, values, cmap='coolwarm', levels=128)
         if self.show_mesh:
             # plot mesh edges
-            quatplot(mesh, _ax, color='k', facecolor='none')
+            c = 'k'
+        else:
+            c = 'none'
+        fig = surface_plot(mesh, values, _ax, c='k')
         return values, fig, _ax
 
     def plot3d(self, *args):
         """Plot 3D results"""
-        mesh, values, axes, component = args
+        mesh, values, component = args
         # make a 3d figure
         _ax = plt.figure().add_subplot(projection='3d')
         # setting plot labels
-        _ax.set_xlabel(axes[0]+'$\\longrightarrow$')
-        _ax.set_ylabel(axes[1]+'$\\longrightarrow$')
-        _ax.set_zlabel(axes[2]+'$\\longrightarrow$')
+        _ax.set_xlabel('x')
+        _ax.set_ylabel('y')
+        _ax.set_zlabel('z')
         # get specified component from the given data
         if values.ndim > 1:
             if component < 0:
@@ -136,7 +131,7 @@ class Plotter():
         _c = 'none'
         if self.show_mesh:
             _c = 'k'
-        fig = polyplot(mesh, values, _ax, c=_c)
+        fig = volume_plot(mesh, values, _ax, c=_c)
         return values, fig, _ax
 
     def plot_displacement(self, field, label: str = '', component: int = 0, **kwds):
@@ -181,8 +176,11 @@ class Plotter():
         else:
             axis = _ax
         if isinstance(axis, Axes3D):
+            angles = 90, -90
             axis.set_proj_type('ortho')  # set projection type to orthoganale
-            axis.view_init(90, -90)  # xy view
+            axis.view_init(*angles)  # xy view
+            if self.axes is not None:
+                self.axes.view_init(*angles)
             axis.set_zticks([])  # hide z-axis ticks
 
     def yz_view(self, _ax=None):
@@ -192,8 +190,11 @@ class Plotter():
         else:
             axis = _ax
         if isinstance(axis, Axes3D):
+            angles = 0, 0
             axis.set_proj_type('ortho')  # set projection type to orthoganale
-            axis.view_init(0, 0)  # yz view
+            axis.view_init(*angles)  # yz view
+            if self.axes is not None:
+                self.axes.view_init(*angles)
             axis.set_xticks([])  # hide x-axis ticks
 
     def xz_view(self, _ax=None):
@@ -203,8 +204,11 @@ class Plotter():
         else:
             axis = _ax
         if isinstance(axis, Axes3D):
+            angles = 0, -90
             axis.set_proj_type('ortho')  # set projection type to orthoganale
-            axis.view_init(0, -90)  # xz view
+            axis.view_init(*angles)  # xz view
+            if self.axes is not None:
+                self.axes.view_init(*angles)
             axis.set_yticks([])  # hide y-axis ticks
 
     def hide_grid(self, _x: bool = True, _y: bool = True, _z: bool = True):
@@ -232,3 +236,26 @@ class Plotter():
 
         else:
             self._ax.set_axis_off()
+
+    def add_axes(self):
+        """Add axes orientation plot"""
+        rect = [0, 0, 0.2, 0.2]
+        if isinstance(self._ax, Axes3D):
+            # Create axes to handel orientation plot
+            ax_inset = plt.gcf().add_axes(rect, anchor='NW', projection='3d')
+            ax_inset.set_axis_off()
+            directions = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+            colors = ['crimson', 'green', 'blue']
+            axes = ['x', 'y', 'z']
+            kwargs = dict(clip_on=False)
+            # Add 3D arrows
+            arrow_3d(ax_inset, theta_x=90, theta_z=90,
+                     color='crimson', **kwargs)  # x
+            arrow_3d(ax_inset, theta_x=270, color='limegreen', **kwargs)  # y
+            arrow_3d(ax_inset, color='blue', **kwargs)  # z
+            # Add axes annotations
+            for i, dir_ in enumerate(directions):
+                ax_inset.text(*dir_, axes[i], 'x', color=colors[i])
+            ax_inset.set_proj_type('ortho')
+            ax_inset.set_box_aspect([.1, .1, .1])
+            self.axes = ax_inset
