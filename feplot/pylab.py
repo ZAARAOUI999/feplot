@@ -26,9 +26,10 @@ from matplotlib import rcParams, tri, ticker
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from .tools import surface_plot, volume_plot
-from .entities import arrow_3d
+from .tools import line_plot, surface_plot, volume_plot
+from .entities import arrow_3d, sphere
 rcParams['pgf.texsystem'] = 'pdflatex'
+rcParams['font.fantasy'] = 'Times New Roman'
 rcParams.update({'font.family': 'serif', 'font.size': 10,
                  'axes.labelsize': 10, 'axes.titlesize': 10,
                  'figure.titlesize': 10})
@@ -49,6 +50,41 @@ class Plotter():
         self._ax = None
         self.data = dict()
         self.axes = None
+
+    def add_mesh(self, meshes, scalars, component=0, **kwds):
+        """Plot mesh with defined scalars"""
+        args = ['show_mesh', 'show_min_max', 'grid', 'n_ticks']
+        for arg in args:
+            if arg in kwds:
+                setattr(self, arg, kwds[arg])
+        if 'label' in kwds:
+            label = kwds.get('label')
+        else:
+            label = '?'
+        self.data.clear()
+        if not isinstance(meshes, list):
+            meshes = [meshes]
+        if not isinstance(scalars, list):
+            scalars = [scalars]
+
+        self.data['mesh'] = meshes
+        dim = meshes[0].points.shape[1]
+        if dim == 3:
+            self._ax = plt.figure().add_subplot(projection='3d')
+            for i, mesh in enumerate(meshes):
+                fig = self.plot3d(mesh, scalars[i], component)
+        else:
+            self._ax = plt.figure().add_subplot()
+            if meshes[0].cells.shape[1] == 2:
+                for i, mesh in enumerate(meshes):
+                    fig = self.plot1d(mesh, scalars[i], component)
+            else:
+                for i, mesh in enumerate(meshes):
+                    fig = self.plot2d(mesh, scalars[i], component)
+        scalars_min = min([scalar.min() for scalar in scalars])
+        scalars_max = max([scalar.max() for scalar in scalars])
+        self.colorbar(fig=fig, _ax=self._ax, label=label,
+                      span=[scalars_min, scalars_max])
 
     def plot(self, field, values, component: int = 0,
              update: bool = True, **kwds):
@@ -82,20 +118,21 @@ class Plotter():
             self.data.get('points')[:, :dim] += _du[:, :dim]
 
         if dim == 3:
-            values, fig, _ax = self.plot3d(
-                self.data.get('mesh'), values, component)
-            self._ax = _ax
+            self._ax = plt.figure().add_subplot(projection='3d')
+            fig = self.plot3d(self.data.get('mesh'), values, component)
         else:
-            values, fig, _ax = self.plot2d(
-                self.data.get('mesh'), values, component)
-            self._ax = _ax
-        self.colorbar(fig, _ax, label=label, span=[values.min(), values.max()])
+            self._ax = plt.figure().add_subplot()
+            if self.data.get('cells').shape[1] == 2:
+                fig = self.plot1d(self.data.get('mesh'), values, component)
+            else:
+                fig = self.plot2d(self.data.get('mesh'), values, component)
+        self.colorbar(fig, self._ax, label=label, span=[
+                      values.min(), values.max()])
 
-    def plot2d(self, *args):
-        """Plot 2D results"""
+    def plot1d(self, *args):
+        """Plot 1D results"""
         mesh, values, component = args
-        # make a 2d figure
-        _ax = plt.figure().add_subplot()
+        _ax = self._ax
         # setting plot labels
         _ax.set_xlabel('x')
         _ax.set_ylabel('y')
@@ -105,19 +142,38 @@ class Plotter():
                 values = values.mean(-1)
             else:
                 values = values[:, component]
+        c = 'face'
         if self.show_mesh:
             # plot mesh edges
             c = 'k'
-        else:
-            c = 'none'
-        fig = surface_plot(mesh, values, _ax, c='k')
-        return values, fig, _ax
+        fig = line_plot(mesh, values, _ax)
+        return fig
+
+    def plot2d(self, *args):
+        """Plot 2D results"""
+        mesh, values, component = args
+        _ax = self._ax
+        # setting plot labels
+        _ax.set_xlabel('x')
+        _ax.set_ylabel('y')
+        # get specified component from the given data
+        if values.ndim > 1:
+            if component < 0:
+                values = values.mean(-1)
+            else:
+                values = values[:, component]
+        c = 'face'
+        if self.show_mesh:
+            # plot mesh edges
+            c = 'k'
+        fig = surface_plot(mesh, values, _ax, c=c)
+        return fig
 
     def plot3d(self, *args):
         """Plot 3D results"""
         mesh, values, component = args
+        _ax = self._ax
         # make a 3d figure
-        _ax = plt.figure().add_subplot(projection='3d')
         # setting plot labels
         _ax.set_xlabel('x')
         _ax.set_ylabel('y')
@@ -128,11 +184,11 @@ class Plotter():
                 values = values.mean(-1)
             else:
                 values = values[:, component]
-        _c = 'none'
+        _c = 'face'
         if self.show_mesh:
             _c = 'k'
         fig = volume_plot(mesh, values, _ax, c=_c)
-        return values, fig, _ax
+        return fig
 
     def plot_displacement(self, field, label: str = '', component: int = 0, **kwds):
         """Plot field displacements"""
@@ -146,7 +202,7 @@ class Plotter():
             grad=False), self.data.get('region'))
         self.plot(field, values, component, update=False, label=label, **kwds)
 
-    def colorbar(self, fig, _ax, label: str, span: list, **kwds):
+    def colorbar(self, fig=None, _ax=None, label: str = '', span: list = [0, 1], **kwds):
         """Add a colorbar"""
         args = ['grid', 'n_ticks']
         for arg in args:
@@ -237,6 +293,9 @@ class Plotter():
         else:
             self._ax.set_axis_off()
 
+    def add_annotation(self, u, v, text, fontsize='medium'):
+        plt.gcf().text(u, v, text, fontsize=fontsize)
+
     def add_axes(self):
         """Add axes orientation plot"""
         rect = [0, 0, 0.2, 0.2]
@@ -258,4 +317,25 @@ class Plotter():
                 ax_inset.text(*dir_, axes[i], 'x', color=colors[i])
             ax_inset.set_proj_type('ortho')
             ax_inset.set_box_aspect([.1, .1, .1])
+            sphere(ax_inset, radius=.15, color='orange')
             self.axes = ax_inset
+        else:
+            # Create axes to handel orientation plot
+            ax_inset = plt.gcf().add_axes(rect, anchor='NW', projection='3d')
+            ax_inset.set_axis_off()
+            directions = [[1, 0, 0], [0, 1, 0]]
+            colors = ['crimson', 'green']
+            axes = ['x', 'y']
+            kwargs = dict(clip_on=False)
+            # Add 3D arrows
+            arrow_3d(ax_inset, theta_x=90, theta_z=90,
+                     color='crimson', **kwargs)  # x
+            arrow_3d(ax_inset, theta_x=270, color='limegreen', **kwargs)  # y
+            # Add axes annotations
+            for i, dir_ in enumerate(directions):
+                ax_inset.text(*dir_, axes[i], 'x', color=colors[i])
+            ax_inset.scatter([0], [0], [0], s=30, marker='o', c='orange')
+            ax_inset.set_proj_type('ortho')
+            ax_inset.set_box_aspect([.1, .1, .1])
+            ax_inset.view_init(90, -90)
+            sphere(ax_inset, radius=.15, color='orange', alpha=1)
