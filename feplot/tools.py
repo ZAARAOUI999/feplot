@@ -22,6 +22,7 @@
 import numpy as np
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import matplotlib.path as mpath
 
 from scipy.spatial import ConvexHull as conv
 from matplotlib import collections
@@ -29,20 +30,70 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
 hex_mask = np.array([[0, 1, 2, 3], [0, 1, 5, 4],
-                     (1, 2, 6, 5), [2, 3, 7, 6],
+                     [1, 2, 6, 5], [2, 3, 7, 6],
                      [0, 3, 7, 4], [4, 5, 6, 7]])
+
+hex_mask_sk = np.array([[7, 4, 2, 6], [4, 1, 0, 2],
+                        [1, 5, 3, 0], [5, 7, 6, 3],
+                        [7, 4, 1, 5], [6, 2, 0, 3]])
 
 tetra_mask = np.array([[0, 1, 2], [0, 2, 3],
                       [0, 3, 1], [1, 2, 3]])
 
+tetra_mask_sk = np.array([[1, 2, 3], [0, 2, 3],
+                          [0, 1, 3], [0, 1, 2]])
+
+tri_mask = np.array([0, 1, 2])
+
+tri6_mask = np.array([0, 1, 2, 3, 4, 5])
+
+quad_mask = np.array([0, 1, 2, 3])
+
+quad9_mask = np.array([0, 1, 2, 3])
+
+line_mask = np.array([0, 1])
+
+MASK = {'line': line_mask,
+        'triangle': tri_mask,
+        'triangle6': tri6_mask,
+        'quad': quad_mask,
+        'quad9': quad9_mask,
+        'tetra': tetra_mask,
+        'tetra_sk': tetra_mask_sk,
+        'hexahedron': hex_mask,
+        'hexahedron_sk': hex_mask_sk}
+
+
+def line_plot(mesh, values=None, ax=None, cmap='coolwarm', linewidth=3, alpha=1.0):
+    """ plot line gradient"""
+    p = mesh.points
+
+    values = np.asarray(values)
+    if p.shape[1] == 1:
+        p = np.column_stack([p, values.reshape(p.shape[0], -1)])
+    segments = p[:, :2][mesh.cells]
+    values = values.reshape(p.shape[0], -1).mean(1)[mesh.cells].mean(1)
+    lc = collections.LineCollection(segments, array=values, cmap=cmap,
+                                    linewidth=linewidth, alpha=alpha)
+    ax.add_collection(lc)
+    ax.set_aspect('equal')
+
+    return lc
+
 
 def surface_plot(mesh, values, _ax, **kwargs):
     """Plot a 2D mesh"""
-    verts = mesh.points[mesh.cells]
-    _mesh = collections.PolyCollection(verts, edgecolor=kwargs.pop('c'),
-                                       cmap='coolwarm')
-    _mesh.set_array(values[mesh.cells].reshape(-1, 4).mean(1))
+    verts = mesh.points[mesh.cells[:, MASK[mesh.cell_type]]]
+    _mesh = collections.PolyCollection(verts, edgecolors=kwargs.pop('c'),
+                                       cmap='coolwarm', linewidths=.5)
+    condition = verts.shape[0]*verts.shape[1] == values.shape[0]
+    if condition:
+        _mesh.set_array(values.reshape(-1, mesh.cells.shape[1]).mean(1))
+    else:
+        _mesh.set_array(values[mesh.cells[:, MASK[mesh.cell_type]]].mean(1))
+
     _ax.add_collection(_mesh)
+    _ax.set_aspect('auto')
     _ax.autoscale()
     return _mesh
 
@@ -56,14 +107,16 @@ def volume_plot(mesh, values, _ax, update=True, **kwargs):
     # Convert points array to cells points array
     points = points[cells]
     # Get cell type mask
-    if cell_type == 'hexahedron':
-        mask = hex_mask
-    elif cell_type == 'tetra':
-        mask = tetra_mask
+    if cell_type in ['hexahedron', 'hexahedron_sk']:
+        d = 4
+    elif cell_type in ['tetra', 'tetra_sk']:
+        d = 3
     # Get polygons
-    polys = points[:, mask].reshape(-1, 4, 3)
+    polys = points[:, MASK[mesh.cell_type]].reshape(-1, d, 3)
+    print(len(cells), values.shape, polys.shape)
     # Project values
-    values = values[cells][:, mask].reshape(-1, 4).mean(1)
+    values = values[cells[:, MASK[mesh.cell_type]]].reshape(-1, d).mean(1)
+    print(values.shape)
     # Create matplotlib mesh
     _mesh = Poly3DCollection(polys, linewidths=.5, edgecolor=kwargs.pop('c'),
                              closed=True, cmap='coolwarm', zsort='average',
