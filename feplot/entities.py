@@ -51,3 +51,11 @@ def arrow_3d(_ax, length=1, width=0.05, head=0.2, headwidth=2,
     _y = b_2[:, 1].reshape(_r.shape)
     _z = b_2[:, 2].reshape(_r.shape)
     _ax.plot_surface(_x, _y, _z, **kwargs)
+    
+def sphere(_ax, origin=[0,0,0], radius=1, **kwargs):
+    """Plot a sphere defined by its radius"""
+    u, v = np.mgrid[0:2*np.pi:50j, 0:np.pi:50j]
+    x = origin[0] + radius*np.cos(u)*np.sin(v)
+    y = origin[1] + radius*np.sin(u)*np.sin(v)
+    z = origin[2] + radius*np.cos(v)
+    _ax.plot_surface(x, y, z, **kwargs)
