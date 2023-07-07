@@ -57,6 +57,7 @@ all = [
 homepage = "https://feplot.readthedocs.io/en/latest"
 code = "https://github.com/ZAARAOUI999/feplot"
 issues = "https://github.com/ZAARAOUI999/feplot/issues"
+repository = "https://github.com/ZAARAOUI999/feplot.git"
 
 [build-system]
 requires = ["setuptools>=42", "wheel"]
