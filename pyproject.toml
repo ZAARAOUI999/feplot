@@ -47,10 +47,6 @@ dependencies = [
 [project.optional-dependencies]
 all = [
     "meshio",
-    "h5py",
-    "numba",
-    "sparse",
-    "einsumt",
 ]
 
 [project.urls]
