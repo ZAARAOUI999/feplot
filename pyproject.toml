@@ -1,8 +1,8 @@
 
 [project]
 name = "feplot"
-version = "0.1.0"
-description = "Visualization tool for FElupe"
+version = "0.1.1"
+description = "A visualization tool for FElupe"
 readme = "README.md"
 requires-python = ">=3.6"
 license = {file = "LICENSE"}
@@ -40,14 +40,11 @@ classifiers = [
 dependencies = [
   "numpy",
   "scipy",
-  "matplotlib",
+  "pyvista",
+  "meshio",
   "felupe",
 ]
 
-[project.optional-dependencies]
-all = [
-    "meshio",
-]
 
 [project.urls]
 homepage = "https://feplot.readthedocs.io/en/latest"
