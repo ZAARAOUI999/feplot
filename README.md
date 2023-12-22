@@ -1,7 +1,7 @@
 <p align="center">
-    <img width="400" height="378" src="https://github.com/ZAARAOUI999/feplot/assets/115699524/6dd41528-425c-4d7d-b2f7-6886abf63992">
+    <img width="400" height="378" src="https://github.com/ZAARAOUI999/feplot/assets/115699524/dc9fbd56-4061-43b7-a264-e9068591c3d4">
  </p>
- 
+
  <h1 align="center">
      A visualization tool for FElupe
  </h1>
