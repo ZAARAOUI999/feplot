@@ -1,3 +1,4 @@
+####################### - بــسم الله الرحمــان الرحيــم - #####################
 
 """
     FEPlot
@@ -19,323 +20,294 @@
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 """
 
-import felupe as fem
+import re
+import pyvista as pv
+import numpy as np
+import vtk
+from pyvista.plotting.renderer import make_legend_face, map_loc_to_pos
+from pyvista.plotting.colors import Color
+from pyvistaqt import BackgroundPlotter
+from qtpy.QtWidgets import (QComboBox, QLabel, QPushButton, QSlider)
+from qtpy.QtCore import Qt, QTimer
+from qtpy.QtGui import QIcon
 
-import matplotlib.pyplot as plt
-from matplotlib import rcParams, tri, ticker
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from mpl_toolkits.mplot3d.axes3d import Axes3D
+from ._helpers import *
+from ._xdmf import XDMFReader
 
-from .tools import line_plot, surface_plot, volume_plot
-from .entities import arrow_3d, sphere
-rcParams['pgf.texsystem'] = 'pdflatex'
-rcParams['font.fantasy'] = 'Times New Roman'
-rcParams.update({'font.family': 'serif', 'font.size': 10,
-                 'axes.labelsize': 10, 'axes.titlesize': 10,
-                 'figure.titlesize': 10})
+pv.set_plot_theme("document")
 
 
-class Plotter():
-    """
-    A simple plot helper for FElupe library.
-    """
+class Plotter(BackgroundPlotter):
+    """VTK Plotter class"""
 
-    def __init__(self):
-        super().__init__()
-        self.show_mesh = True
-        self.show_min_max = True
-        self.deformed = True
-        self.n_ticks = 8
-        self.grid = False
-        self._ax = None
-        self.data = dict()
-        self.axes = None
+    def __init__(self, **kwargs):
+        super().__init__(title='FEPlot', toolbar=False, editor=False,
+                         **kwargs)
+        self._mesh = None
+        self._undeformed_mesh = None
+        self._args = None
+        self._mesh_actor = None
+        self._legend_actor = None
+        self.toolbar = None
+        self.process = None
+        self.substep_text = None
+        self.current_substep = 0
+        self.data_size = dict()
+        self.steps = list()
+        self.scalar_bar_args = {'title': 'U Magnitude\n', 'n_labels': 8,
+                                'bold': False, 'title_font_size': 14,
+                                'label_font_size': 12, 'font_family': 'courier',
+                                'position_x': 0.05, 'height': 0.45, 'width': 0.07,
+                                'position_y': 0.5, 'vertical': True,
+                                'interactive': False}
+        self._kwargs = dict(style='surface', scalar_bar_args=self.scalar_bar_args,
+                            n_colors=128, cmap='turbo', show_edges=True, name='Mesh')
+        self.legend_kwargs = dict(size=(0.1, 0.1), bcolor='w', loc='upper right',
+                                  face=None, font_family='courier')
+        
+        self.add_axes()
+        self.add_key_events()
+        self.configure_menu()
+        self.add_toolbar()
+        self.timer = QTimer()
+        self.timer.setInterval(500)
+        self.timer.timeout.connect(self.animate_frames)
+        self.app_window.setWindowIcon(QIcon(icon_file('feplot')))
+        self.app.setStyle('Fusion')
+        
+    def configure_menu(self):
+        """Configure the main menu"""
+        update_menu(self)
 
-    def add_mesh(self, meshes, scalars, component=0, **kwds):
-        """Plot mesh with defined scalars"""
-        args = ['show_mesh', 'show_min_max', 'grid', 'n_ticks']
-        for arg in args:
-            if arg in kwds:
-                setattr(self, arg, kwds[arg])
-        if 'label' in kwds:
-            label = kwds.get('label')
+    def add_toolbar(self):
+        """Add a toolbar"""
+        self.toolbar = self.app_window.addToolBar('datasets')
+        self.scalar_combo = QComboBox(self.app_window)
+        self.component_combo = QComboBox(self.app_window)
+        self.component_combo.setFixedWidth(63)
+        _widgets = [QLabel("Scalar: "), self.scalar_combo,
+                    QLabel("Component: "), self.component_combo]
+
+        i = 0
+        for _w in _widgets:
+            self.toolbar.addWidget(_w)
+            i += 1
+            if i == 2:
+                self.toolbar.addSeparator()
+
+        self.scalar_combo.currentTextChanged.connect(self.update_components)
+        self.component_combo.currentTextChanged.connect(self.update_data)
+        self.add_slider()
+        self.add_animation_tools()
+
+    def add_slider(self):
+        """Add time slider widget"""
+        self.sl = QSlider(Qt.Horizontal)
+        self.sl.setMinimum(0)
+        self.sl.setMaximum(0)
+        self.sl.setValue(0)
+        self.sl.setSingleStep(1)
+        self.sl.setFixedWidth(200)
+        self.sl.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.sl.setTickInterval(5)
+        self.sl.valueChanged.connect(self.load_time)
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(QLabel('Substep: '))
+        self.toolbar.addWidget(self.sl)
+
+    def add_animation_tools(self):
+        """Add animation control buttons"""
+        self.btn_play = QPushButton(QIcon(icon_file('play')), '')
+        self.btn_stop = QPushButton(QIcon(icon_file('stop')), '')
+        self.btn_play.clicked.connect(self.animate)
+        self.btn_stop.clicked.connect(self.stop_animation)
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(self.btn_play)
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(self.btn_stop)
+
+    def add_key_events(self):
+        """Add key events"""
+        self.add_key_event('x', lambda: self.view_yz())
+        self.add_key_event('y', lambda: self.view_xz())
+        self.add_key_event('z', lambda: self.view_xy())
+        self.add_key_event('h', lambda: self.toggle_widgets())
+        self.add_key_event('m', lambda: self.show_edges())
+        
+    #pyvista modified add_legend function
+    def add_legend(
+        self,
+        labels=None,
+        bcolor=(0.5, 0.5, 0.5),
+        border=False,
+        size=(0.2, 0.2),
+        name=None,
+        loc='upper right',
+        face='triangle',
+        font_family='courier',
+    ):
+        """Add a legend to render window."""
+
+        self._legend = vtk.vtkLegendBoxActor()
+        self._legend.SetNumberOfEntries(len(labels))
+        legend_face = make_legend_face(face)
+        for i, (text, color) in enumerate(labels):
+            self._legend.SetEntry(i, legend_face, text, Color(color).float_rgb)
+        if loc is not None:
+            x, y, size = map_loc_to_pos(loc, size, border=0.02)
+            self._legend.SetPosition(x, y)
+            self._legend.SetPosition2(size[0], size[1])
+        self._legend.SetUseBackground(True)
+        self._legend.SetBackgroundColor(Color(bcolor).float_rgb)
+        self._legend.SetBorder(border)
+        legend_text = self._legend.GetEntryTextProperty()
+        legend_text.SetFontFamily(
+            pv.tools.parse_font_family('courier'))
+        self.add_actor(self._legend, reset_camera=False,
+                       name=name, pickable=False)
+        return self._legend
+
+    def animate(self):
+        """Start the animation"""
+        self.btn_play.setDisabled(True)
+        self.btn_stop.setDisabled(False)
+        self.timer.start()
+
+    def animate_frames(self):
+        """play next animation frame"""
+        if self.current_substep < len(self.steps):
+            self.current_substep += 1
         else:
-            label = '?'
-        self.data.clear()
-        if not isinstance(meshes, list):
-            meshes = [meshes]
-        if not isinstance(scalars, list):
-            scalars = [scalars]
+            self.current_substep = 0
+        self.sl.setValue(self.current_substep)
 
-        self.data['mesh'] = meshes
-        dim = meshes[0].points.shape[1]
-        if dim == 3:
-            self._ax = plt.figure().add_subplot(projection='3d')
-            for i, mesh in enumerate(meshes):
-                fig = self.plot3d(mesh, scalars[i], component)
+    def stop_animation(self):
+        """Stop the animation"""
+        self.btn_stop.setDisabled(True)
+        self.btn_play.setDisabled(False)
+        self.timer.stop()
+
+    def set_anti_aliasing(self, stats):
+        """Enable/Disable anti-aliasing"""
+        if stats:
+            self.renderer.enable_anti_aliasing
         else:
-            self._ax = plt.figure().add_subplot()
-            if meshes[0].cells.shape[1] == 2:
-                for i, mesh in enumerate(meshes):
-                    fig = self.plot1d(mesh, scalars[i], component)
+            self.renderer.disable_anti_aliasing
+        self.update()
+
+    def read_mesh(self, mesh, data, *args, **kwargs):
+        """Read mesh"""
+        self._mesh = mesh
+        self._undeformed_mesh = mesh
+        # self.add_mesh(self._undeformed_mesh, opacity=0.3, name="undeformed_mesh")
+        self._args = args
+        self._kwargs.update(kwargs)
+        for scalar, value in data.items():
+            if scalar == 'Displacement':
+                self._mesh = update_mesh(self._mesh, value)
+        self._mesh_actor = self.add_mesh(
+            self._mesh, *self._args, **self._kwargs)
+
+    def read_xdmf(self, filename: str):
+        """Read XDMF file"""
+        self.reader = XDMFReader(filename)
+        self.mesh = self.reader.get_mesh()
+        self.steps = self.reader.get_steps()
+        self.check_scalars(self.reader)
+        self.update_components()
+        self.update_slider(len(self.steps)-1)
+        self._kwargs['interpolate_before_map'] = True
+        self.load_time(0)
+
+    def load_time(self, k):
+        """ Load solution at value specified using the slider """
+        if self.component_combo.currentText() != '':
+
+            self.current_substep = k = int(k)
+            t, point_data, cell_data = self.reader.read_data(k)
+            scalar = self.scalar_combo.currentText()
+            title = self.component_combo.currentText() + '\n '
+            if scalar in point_data.keys():
+                scalars = point_data[scalar]
+                self._kwargs['preference'] = 'point'
+            elif scalar in cell_data.keys():
+                scalars = cell_data[scalar][0]
+                self._kwargs['preference'] = 'cell'
+            self._kwargs['scalars'] = scalars
+            self.scalar_bar_args['title'] = title
+            self._kwargs['scalar_bar_args'] = self.scalar_bar_args
+            data = {'Displacement': point_data['Displacement']}
+            if self._mesh_actor is None:
+                self.read_mesh(self.mesh, data, **self._kwargs)
+                self.update_view()
+                self._legend_actor = self.add_legend([('Substep: %d' % int(k), 'k')],
+                                                     **self.legend_kwargs)
             else:
-                for i, mesh in enumerate(meshes):
-                    fig = self.plot2d(mesh, scalars[i], component)
-        scalars_min = min([scalar.min() for scalar in scalars])
-        scalars_max = max([scalar.max() for scalar in scalars])
-        self.colorbar(fig=fig, _ax=self._ax, label=label,
-                      span=[scalars_min, scalars_max])
+                self.remove_legend()
+                self._legend_actor = self.add_legend([('Substep: %d' % int(k), 'k')],
+                                                     **self.legend_kwargs)
+                _n = scalars.shape[0]
+                _c = self.component_combo.currentIndex()
+                data = scalars.reshape(_n, -1)[..., _c]
+                mapper = self._mesh_actor.mapper
+                mesh = mapper.dataset
+                
+                #force updating scalar map mode
+                mapper.scalar_map_mode = self._kwargs['preference']
+                
+                if self._kwargs['preference'] == 'point':
+                    mesh.point_data[scalar] = data
+                else:
+                    # mapper.scalar_map_mode = 'point'
+                    # mapper.color_mode = 'map'
+                    mesh.cell_data[scalar] = data
+                    # c2p = vtk.vtkCellDataToPointData()
+                    # c2p.SetInputData(mesh)
+                    # c2p.Update()
+                    # mesh = pv.UnstructuredGrid(c2p.GetOutput())
+                mesh.set_active_scalars(scalar)
+                old_title = list(
+                    self._scalar_bars._scalar_bar_actors.keys())[0]
+                self._scalar_bars._scalar_bar_actors[old_title].SetTitle(title)
+                self.update_scalar_bar_range([data.min(), data.max()])
+                mesh.points = self._mesh.points + point_data['Displacement']
+                self.set_focus(mesh.center)
+                self.update_view()
 
-    def plot(self, field, values, component: int = 0,
-             update: bool = True, **kwds):
-        """Plot results"""
-        # Clear everything
-        plt.clf()
-        # Update Plotter attributes
-        args = ['deformed', 'show_mesh',
-                'show_min_max', 'grid', 'n_ticks', 'axes']
-        for arg in args:
-            if arg in kwds:
-                setattr(self, arg, kwds[arg])
-        if 'label' in kwds:
-            label = kwds.get('label')
-        else:
-            label = '?'
-        if update:
-            self.data['region'] = field.region
-            self.data['mesh'] = field.region.mesh.copy()
-            self.data['points'] = self.data.get('mesh').points
-            self.data['cells'] = self.data.get('mesh').cells
+    def check_scalars(self, reader):
+        """Update scalars and their data sizes"""
+        self.scalar_combo.clear()
+        (point_data_scalars, point_data_sizes, cell_data_scalars,
+         cell_data_sizes) = self.reader.get_scalars_info().values()
+        self.scalar_combo.addItems(point_data_scalars)
+        self.data_size = dict(zip(point_data_scalars, point_data_sizes))
+        self.scalar_combo.addItems(cell_data_scalars)
+        self.data_size.update(dict(zip(cell_data_scalars, cell_data_sizes)))
 
-        # get fields dimension
-        dim = self.data.get('points').shape[-1]
+    def update_components(self):
+        """Update current scalar components"""
+        if len(self.data_size) != 0:
+            self.component_combo.clear()
+            scalar = self.scalar_combo.currentText()
+            _nc = self.data_size[scalar]
+            self.component_combo.addItems(
+                [re.sub('[^A-Z]', '', scalar) + f'{_i}' for _i in range(_nc)])
 
-        # get displacements
-        _du = fem.project(field.fields[0].extract(
-            grad=False), self.data.get('region'))
-        if self.deformed:
-            # add dispalacements to the reference points coordinates
-            self.data.get('points')[:, :dim] += _du[:, :dim]
+    def update_data(self):
+        """Update current data"""
+        if self.reader is not None:
+            self.load_time(self.current_substep)
 
-        if dim == 3:
-            self._ax = plt.figure().add_subplot(projection='3d')
-            fig = self.plot3d(self.data.get('mesh'), values, component)
-        else:
-            self._ax = plt.figure().add_subplot()
-            if self.data.get('cells').shape[1] == 2:
-                fig = self.plot1d(self.data.get('mesh'), values, component)
-            else:
-                fig = self.plot2d(self.data.get('mesh'), values, component)
-        self.colorbar(fig, self._ax, label=label, span=[
-                      values.min(), values.max()])
+    def update_slider(self, max_value: int):
+        self.sl.setMaximum(max_value)
 
-    def plot1d(self, *args):
-        """Plot 1D results"""
-        mesh, values, component = args
-        _ax = self._ax
-        # setting plot labels
-        _ax.set_xlabel('x')
-        _ax.set_ylabel('y')
-        # get specified component from the given data
-        if values.ndim > 1:
-            if component < 0:
-                values = values.mean(-1)
-            else:
-                values = values[:, component]
-        c = 'face'
-        if self.show_mesh:
-            # plot mesh edges
-            c = 'k'
-        fig = line_plot(mesh, values, _ax)
-        return fig
+    def show_edges(self, *args, **kwargs):
+        """Show mesh edges"""
+        prop = self._mesh_actor.prop
+        prop.show_edges = not prop.show_edges
+        self.render()
 
-    def plot2d(self, *args):
-        """Plot 2D results"""
-        mesh, values, component = args
-        _ax = self._ax
-        # setting plot labels
-        _ax.set_xlabel('x')
-        _ax.set_ylabel('y')
-        # get specified component from the given data
-        if values.ndim > 1:
-            if component < 0:
-                values = values.mean(-1)
-            else:
-                values = values[:, component]
-        c = 'face'
-        if self.show_mesh:
-            # plot mesh edges
-            c = 'k'
-        fig = surface_plot(mesh, values, _ax, c=c)
-        return fig
-
-    def plot3d(self, *args):
-        """Plot 3D results"""
-        mesh, values, component = args
-        _ax = self._ax
-        # make a 3d figure
-        # setting plot labels
-        _ax.set_xlabel('x')
-        _ax.set_ylabel('y')
-        _ax.set_zlabel('z')
-        # get specified component from the given data
-        if values.ndim > 1:
-            if component < 0:
-                values = values.mean(-1)
-            else:
-                values = values[:, component]
-        _c = 'face'
-        if self.show_mesh:
-            _c = 'k'
-        fig = volume_plot(mesh, values, _ax, c=_c)
-        return fig
-
-    def plot_displacement(self, field, label: str = '', component: int = 0, **kwds):
-        """Plot field displacements"""
-        # update data
-        self.data['region'] = field.region
-        self.data['mesh'] = field.region.mesh.copy()
-        self.data['points'] = self.data.get('mesh').points
-        self.data['cells'] = self.data.get('mesh').cells
-        # get displacements
-        values = fem.project(field.fields[0].extract(
-            grad=False), self.data.get('region'))
-        self.plot(field, values, component, update=False, label=label, **kwds)
-
-    def colorbar(self, fig=None, _ax=None, label: str = '', span: list = [0, 1], **kwds):
-        """Add a colorbar"""
-        args = ['grid', 'n_ticks']
-        for arg in args:
-            if arg in kwds:
-                setattr(self, arg, kwds[arg])
-        # set colorbar
-        c_axis = inset_axes(_ax, width='5%', height='50%',
-                            loc='center left', borderpad=-10)
-        _c = plt.gcf().colorbar(fig, cax=c_axis, pad=1)
-        _c.ax.yaxis.set_ticks_position('right')
-        if self.grid:
-            _c.ax.yaxis.grid(True, color='k')
-        # set colorbar title
-        if self.show_min_max:
-            label += '\nmin: %.1e\nmax: %.1e\n' % (span[0], span[1])
-        _c.ax.set_title(x=0, label=label, verticalalignment='top',
-                        horizontalalignment='left', fontproperties={'size': 10})
-        # set colorbar ticks
-        tick_locator = ticker.MaxNLocator(nbins=self.n_ticks)
-        _c.locator = tick_locator
-        _c.update_ticks()
-
-    def xy_view(self, _ax=None):
-        """Set view orientation to XY"""
-        if not _ax:
-            axis = self._ax
-        else:
-            axis = _ax
-        if isinstance(axis, Axes3D):
-            angles = 90, -90
-            axis.set_proj_type('ortho')  # set projection type to orthoganale
-            axis.view_init(*angles)  # xy view
-            if self.axes is not None:
-                self.axes.view_init(*angles)
-            axis.set_zticks([])  # hide z-axis ticks
-
-    def yz_view(self, _ax=None):
-        """Set view orientation to YZ"""
-        if not _ax:
-            axis = self._ax
-        else:
-            axis = _ax
-        if isinstance(axis, Axes3D):
-            angles = 0, 0
-            axis.set_proj_type('ortho')  # set projection type to orthoganale
-            axis.view_init(*angles)  # yz view
-            if self.axes is not None:
-                self.axes.view_init(*angles)
-            axis.set_xticks([])  # hide x-axis ticks
-
-    def xz_view(self, _ax=None):
-        """Set view orientation to XZ"""
-        if not _ax:
-            axis = self._ax
-        else:
-            axis = _ax
-        if isinstance(axis, Axes3D):
-            angles = 0, -90
-            axis.set_proj_type('ortho')  # set projection type to orthoganale
-            axis.view_init(*angles)  # xz view
-            if self.axes is not None:
-                self.axes.view_init(*angles)
-            axis.set_yticks([])  # hide y-axis ticks
-
-    def hide_grid(self, _x: bool = True, _y: bool = True, _z: bool = True):
-        """Hide gridlines"""
-        if isinstance(self._ax, Axes3D):
-            self._ax.set_axis_off()
-        else:
-            self._ax.set_axis_off()
-
-    def show_ruler(self, _x: bool = True, _y: bool = True, _z: bool = True):
-        """Show ruler"""
-        axes = {'x': _x, 'y': _y, 'z': _z}
-        self._ax.set_axis_on()
-        self._ax.grid(False)
-        if isinstance(self._ax, Axes3D):
-            for axis in axes.items():
-                getattr(self._ax, 'w_'+axis[0] +
-                        'axis').set_pane_color((1, 1, 1, 0))
-                if not axis[1]:
-                    getattr(self._ax, 'set_'+axis[0]+'ticklabels')([])
-                    getattr(self._ax, 'w_' +
-                            axis[0]+'axis').line.set_color((1, 1, 1, 0))
-                    getattr(self._ax, 'set_'+axis[0]+'ticks')([])
-                    getattr(self._ax, 'set_'+axis[0]+'label')('')
-
-        else:
-            self._ax.set_axis_off()
-
-    def add_annotation(self, u, v, text, fontsize='medium'):
-        plt.gcf().text(u, v, text, fontsize=fontsize)
-
-    def add_axes(self):
-        """Add axes orientation plot"""
-        rect = [0, 0, 0.2, 0.2]
-        if isinstance(self._ax, Axes3D):
-            # Create axes to handel orientation plot
-            ax_inset = plt.gcf().add_axes(rect, anchor='NW', projection='3d')
-            ax_inset.set_axis_off()
-            directions = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-            colors = ['crimson', 'green', 'blue']
-            axes = ['x', 'y', 'z']
-            kwargs = dict(clip_on=False)
-            # Add 3D arrows
-            arrow_3d(ax_inset, theta_x=90, theta_z=90,
-                     color='crimson', **kwargs)  # x
-            arrow_3d(ax_inset, theta_x=270, color='limegreen', **kwargs)  # y
-            arrow_3d(ax_inset, color='blue', **kwargs)  # z
-            # Add axes annotations
-            for i, dir_ in enumerate(directions):
-                ax_inset.text(*dir_, axes[i], 'x', color=colors[i])
-            ax_inset.set_proj_type('ortho')
-            ax_inset.set_box_aspect([.1, .1, .1])
-            sphere(ax_inset, radius=.15, color='orange')
-            self.axes = ax_inset
-        else:
-            # Create axes to handel orientation plot
-            ax_inset = plt.gcf().add_axes(rect, anchor='NW', projection='3d')
-            ax_inset.set_axis_off()
-            directions = [[1, 0, 0], [0, 1, 0]]
-            colors = ['crimson', 'green']
-            axes = ['x', 'y']
-            kwargs = dict(clip_on=False)
-            # Add 3D arrows
-            arrow_3d(ax_inset, theta_x=90, theta_z=90,
-                     color='crimson', **kwargs)  # x
-            arrow_3d(ax_inset, theta_x=270, color='limegreen', **kwargs)  # y
-            # Add axes annotations
-            for i, dir_ in enumerate(directions):
-                ax_inset.text(*dir_, axes[i], 'x', color=colors[i])
-            ax_inset.scatter([0], [0], [0], s=30, marker='o', c='orange')
-            ax_inset.set_proj_type('ortho')
-            ax_inset.set_box_aspect([.1, .1, .1])
-            ax_inset.view_init(90, -90)
-            sphere(ax_inset, radius=.15, color='orange', alpha=1)
+    def update_view(self):
+        """Update view"""
+        self.camera.view_angle = 45.0
+        self.render()
