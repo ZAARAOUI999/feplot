@@ -1,3 +1,4 @@
+####################### - بــسم الله الرحمــان الرحيــم - #####################
 
 """
     FEPlot
@@ -19,31 +20,28 @@
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 """
 
-import copy
+import os
 
-MESH_TYPE_MAPPING = {
-    'MeshTet1': 'tetra_sk',
-    'MeshTet2': 'tetra10',
-    'MeshHex1': 'hexahedron_sk',
-    'MeshHex2': 'hexahedron27',
-    'MeshWedge1': 'wedge',
-    'MeshTri1': 'triangle',
-    'MeshTri2': 'triangle6',
-    'MeshTri1DG': 'triangle',
-    'MeshQuad1': 'quad',
-    'MeshQuad2': 'quad9',
-    'MeshLine1': 'line',
-}
+def icon_file(filename):
+    icon_file = os.path.dirname(os.path.realpath(__file__)) 
+    icon_file += f"\\icons\\{filename}.png"
+    return icon_file
+        
+def update_mesh(mesh, du):
+    """Update mesh points coordinates"""
+    mesh.points += du
+    return mesh
 
-class SKMesh:
-    """Get points, cells and cell_type from skfem mesh"""
-    def __init__(self, mesh):
-        super().__init__()
-        self.points = mesh.doflocs.T
-        self.cells = mesh.t.T
-        type_ = f'{type(mesh)}'
-        self.cell_type = MESH_TYPE_MAPPING[type_[type_.rindex('.')+1:type_.rindex('\'')]]
-    
-    def copy(self):
-        """Return a copy of the mesh data"""
-        return copy.deepcopy(self)
+def update_menu(parent):
+    """update main menu"""
+    _file, _view, _tools = parent.main_menu.actions()
+    parent.main_menu.removeAction(_view)
+    parent.main_menu.removeAction(_tools)
+    _file_menu = _file.menu()
+    # _view_menu = _view.menu()
+    # _tools_menu = _tools.menu()
+    _file_menu.removeAction(_file_menu.actions()[1])
+    # for _action in _view_menu.actions():
+    #     _view_menu.removeAction(_action)
+    # for _action in _tools_menu.actions():
+    #     _tools_menu.removeAction(_action)
