@@ -21,61 +21,29 @@ Starting with a quick example:
 
 ```python
 import felupe as fem
-from feplot.pylab import Plotter 
+from feplot import Plotter 
 
-# create a hexahedron-region on a cube
-mesh = fem.Cube(n=11)
+mesh = fem.Cube(n=6)
 region = fem.RegionHexahedron(mesh)
-
-# add a field container (with a vector-valued displacement field)
 field = fem.FieldContainer([fem.Field(region, dim=3)])
 
-# apply a uniaxial elongation on the cube
-boundaries = fem.dof.uniaxial(field, clamped=True)[0]
+boundaries, loadcase = fem.dof.uniaxial(field, clamped=True)
 
-# define the constitutive material behaviour 
-# and create a nearly-incompressible (u,p,J - formulation) solid body
-umat = fem.NeoHooke(mu=1)
+umat = fem.OgdenRoxburgh(material=fem.NeoHooke(mu=1), r=3, m=1, beta=0)
 solid = fem.SolidBodyNearlyIncompressible(umat, field, bulk=5000)
 
-# prepare a step with substeps
-move = fem.math.linsteps([0, 1], num=10)
-step = fem.Step(
-    items=[solid], 
-    ramp={boundaries["move"]: move}, 
-    boundaries=boundaries
-)
+move = fem.math.linsteps([0, 1, 0, 1, 2, 1], num=5)
+step = fem.Step(items=[solid], ramp={boundaries["move"]: move}, boundaries=boundaries)
 
-# add the step to a job, evaluate all substeps
-job = fem.Job(steps=[step])
-job.evaluate()
+job = fem.CharacteristicCurve(steps=[step], boundary=boundaries["move"])
+job.evaluate(filename="result.xdmf")
 
-# initialize plotter 
-pl = Plotter()
-# plot displacements results (X-Axis)
-pl.plot_displacement(field, label='U$_1$', component=0)
-# hide grid
-pl.hide_grid()
-# add orientation axes
-pl.add_axes()
+p = Plotter()
+p.read_xdmf("result.xdmf")
+
 ```
 
-<p align="center">
-  <img width="344" height="267" src="https://user-images.githubusercontent.com/115699524/202278995-9f4a34dc-58a2-4b5a-88e7-94f397f1cf62.png">
-</p>
-
-Here are some other features:
-
-```python
-# set view to XY-Plane
-pl.xy_view()
-# add ruler (only for X-Axis)
-pl.show_ruler(1, 0, 0)
-```
-
-<p align="center">
-  <img width="344" height="267" src="https://user-images.githubusercontent.com/115699524/202279112-74902ad8-6ebb-498c-bac4-44b6afebccc0.png">
-</p>
+https://github.com/ZAARAOUI999/feplot/assets/115699524/19ac3be1-b829-44bd-82bc-20d0461452a8
 
 # License
 FEplot - A visualization tool for FElupe (C) 2023 Mohamed ZAARAOUI, Tunisia.
