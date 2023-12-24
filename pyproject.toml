@@ -40,7 +40,7 @@ classifiers = [
 dependencies = [
   "numpy",
   "pyvista",
-  "pyvistaqt"
+  "pyvistaqt",
   "meshio",
   "felupe",
 ]
