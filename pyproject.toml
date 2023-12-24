@@ -39,7 +39,6 @@ classifiers = [
 
 dependencies = [
   "numpy",
-  "scipy",
   "pyvista",
   "meshio",
   "felupe",
