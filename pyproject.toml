@@ -1,3 +1,6 @@
+[build-system]
+requires = ["setuptools>=63.0"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "feplot"
@@ -21,21 +24,17 @@ authors = [
 ]
 
 classifiers = [
-  "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python",
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
   "Operating System :: OS Independent",
-  "Programming Language :: Python",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.7",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
   "Topic :: Scientific/Engineering",
   "Topic :: Scientific/Engineering :: Mathematics",
   "Topic :: Utilities"
 ]
+
+dynamic = ["version"] # Version is read from ema_workbench/__init__.py
 
 dependencies = [
   "numpy",
@@ -45,13 +44,16 @@ dependencies = [
   "felupe",
 ]
 
-
 [project.urls]
 homepage = "https://feplot.readthedocs.io/en/latest"
 code = "https://github.com/ZAARAOUI999/feplot"
 issues = "https://github.com/ZAARAOUI999/feplot/issues"
 repository = "https://github.com/ZAARAOUI999/feplot.git"
 
-[build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
+[tool.setuptools.dynamic]
+version = {attr = "feplot.__version__"}
+
+[tool.setuptools.package-data]
+"feplot.icons" = ["**"]
+
+
