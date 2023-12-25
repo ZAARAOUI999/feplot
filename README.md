@@ -6,6 +6,8 @@
      A visualization tool for FElupe
  </h1>
  
+[![Generic badge](https://img.shields.io/badge/pypi-v0.1.13-<COLOR>.svg)](https://pypi.org/project/feplot/) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10429725.svg)](https://doi.org/10.5281/zenodo.10429725) [![Downloads](https://static.pepy.tech/badge/feplot/month)](https://pepy.tech/project/feplot)
+ 
 FEplot is based on the popular visualization library ```pyvista``` which is a comprehensive library for creating static, animated, and interactive visualizations in Python. The main aim of this package is to visualize [FElupe](https://github.com/adtzlr/felupe) results.
 
 ## Setup
