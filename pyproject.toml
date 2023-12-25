@@ -30,11 +30,10 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Topic :: Scientific/Engineering",
-  "Topic :: Scientific/Engineering :: Mathematics",
   "Topic :: Utilities"
 ]
 
-dynamic = ["version"] # Version is read from ema_workbench/__init__.py
+dynamic = ["version"] # Version is read from feplot/__init__.py
 
 dependencies = [
   "numpy",
