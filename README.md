@@ -48,7 +48,7 @@ p.read_xdmf("result.xdmf")
 https://github.com/ZAARAOUI999/feplot/assets/115699524/19ac3be1-b829-44bd-82bc-20d0461452a8
 
 # License
-FEplot - A visualization tool for FElupe (C) 2023 Mohamed ZAARAOUI, Tunisia.
+FEplot - A visualization tool for FElupe (C) 2025 Mohamed ZAARAOUI, Tunisia.
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
